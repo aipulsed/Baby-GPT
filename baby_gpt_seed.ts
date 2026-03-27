@@ -1,31 +1,33 @@
-// =============================================================================
-// BABY GPT SEED — COMPLETE SELF-EVOLVING AI (2026 ARCHITECTURE)
-// =============================================================================
-// SINGLE FILE • TYPESCRIPT WEB APP • NO EXTERNAL DB REQUIRED
-// =============================================================================
-//
-// FEATURES ENGINEERED INTO THE DNA:
-//   ✔ Vector memory + embeddings (local, pgvector-ready)
-//   ✔ Hybrid search  (memory → vector → internet)
-//   ✔ Safe internet  (dictionary, thesaurus, Wikipedia)
-//   ✔ Hangman game   (auto-play + reward system)
-//   ✔ Skill system   (unlocks + score-gated evolution)
-//   ✔ Task planner   (random → extensible goal trees)
-//   ✔ Code generation (module file creation engine)
-//   ✔ Memory sharding (auto-shard at scale threshold)
-//   ✔ Sandbox execution (restricted eval environment)
-//   ✔ Autonomous loop (background ticker)
-//   ✔ Express web app (REST API + SSE live feed)
-//   ✔ Observability   (live stats endpoint)
-//
-// UPGRADE PATH:
-//   - Swap Embedding.embed() → sentence-transformers / OpenAI embeddings
-//   - Swap VectorStore     → pgvector / Supabase / Weaviate
-//   - Swap Planner.decide()→ multi-step reasoning / goal trees
-// =============================================================================
+/**
+ * =============================================================================
+ * BabyGPT Growth-Tree Seed v2.0
+ * Fully engineered self-evolving system — TypeScript Web App
+ * =============================================================================
+ *
+ * Features:
+ *   ✔ MemoryStore  — vocab Map, grammar rules, action history, module counter
+ *   ✔ Embeddings   — deterministic (pluggable → sentence-transformers / OpenAI)
+ *   ✔ VectorStore  — cosine-similarity semantic search, pgvector-ready
+ *   ✔ Reward / Punishment — score-gated skill unlocks & growth triggers
+ *   ✔ Hangman      — MIT 10k word list + auto-play reinforcement loop
+ *   ✔ URL Explorer — safe scrape: dictionary.com / thesaurus.com / Wikipedia
+ *   ✔ Self-learning loop — hangman OR exploration, continuous autonomous cycle
+ *   ✔ Module expansion — threshold-triggered in-memory & file auto-growth
+ *   ✔ Code synthesis hook — generates new .ts modules on evolution triggers
+ *   ✔ Self-transformer hook — evolution event bus for future model upgrades
+ *   ✔ Express web app — REST API + SSE live feed + HTML dashboard
+ *
+ * Upgrade path:
+ *   • Swap Embedding.embed()  → @xenova/transformers / OpenAI Ada-002
+ *   • Swap VectorStore        → pgvector / Supabase / Weaviate
+ *   • Swap Planner.decide()   → goal-tree / multi-step reasoning
+ *   • Swap Sandbox.run()      → isolated-vm / vm2 for true isolation
+ *
+ * Author: Ascended AI Engineering 2026
+ * =============================================================================
+ */
 
 import * as fs from "fs";
-import * as path from "path";
 import * as http from "http";
 import express, { Request, Response } from "express";
 
@@ -34,21 +36,40 @@ import express, { Request, Response } from "express";
 // =============================================================================
 
 const CONFIG = {
-  memoryFile: "memory.json",
-  vectorFile: "vectors.json",
-  logFile: "activity.log",
-  embeddingDim: 128,
-  similarityThreshold: 0.72,
-  maxMemoryBeforeShard: 500,
-  skillUnlockScore: 25,
-  moduleCreationScore: 75,
-  loopDelayMs: 2000,
-  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  // Safe domains for URL exploration (scraping kept inside this list)
+  safeURLs: [
+    "https://api.dictionaryapi.dev/api/v2/entries/en/",
+    "https://api.datamuse.com/words?ml=",
+    "https://en.wikipedia.org/api/rest_v1/page/summary/",
+  ] as string[],
   safeDomains: [
     "api.dictionaryapi.dev",
     "api.datamuse.com",
     "en.wikipedia.org",
+    "www.mit.edu",
   ] as string[],
+
+  minWordLength: 2,
+  maxVectorSize: 128,
+  selfLearningIntervalMs: 2000,
+  rewardFactor: 1.0,
+
+  hangmanWordsURL: "https://www.mit.edu/~ecprice/wordlist.10000",
+  hangmanFallback: ["apple", "banana", "cherry", "intelligence", "learning",
+                    "system", "network", "code", "knowledge", "language"],
+
+  moduleMemoryThreshold: 100, // words before a new module is minted
+  maxModules: 1000,
+
+  similarityThreshold: 0.60,
+  skillUnlockScore: 25,
+  evolutionTriggerScore: 75,
+  shardThreshold: 500,
+
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  logFile: "activity.log",
+  memoryFile: "memory.json",
+  vectorFile: "vectors.json",
 };
 
 // =============================================================================
@@ -58,37 +79,36 @@ const CONFIG = {
 function log(msg: string): void {
   const line = `[${new Date().toISOString()}] ${msg}`;
   console.log(line);
-  fs.appendFileSync(CONFIG.logFile, line + "\n");
+  try { fs.appendFileSync(CONFIG.logFile, line + "\n"); } catch { /* non-fatal */ }
 }
 
-async function safeRequest(url: string): Promise<unknown | null> {
-  if (!CONFIG.safeDomains.some((d) => url.includes(d))) return null;
+/** Only fetches URLs whose hostname is in safeDomains. */
+async function safeGet(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return null;
-    return await res.json();
+    const hostname = new URL(url).hostname;
+    if (!CONFIG.safeDomains.some((d) => hostname.endsWith(d))) {
+      log(`[SAFE] Blocked: ${url}`);
+      return null;
+    }
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    return res.ok ? await res.text() : null;
   } catch {
     return null;
   }
 }
 
 // =============================================================================
-// EMBEDDING ENGINE (SEED VERSION — PLUGGABLE)
+// EMBEDDING ENGINE  (seed-level — pluggable)
 // =============================================================================
 //
-// CURRENT:  Deterministic pseudo-embedding (character hashing)
+//  CURRENT:  Deterministic character-hash embedding → stable for cosine search.
+//  UPGRADE:  Replace embed() with a real model — nothing else changes.
 //
-// UPGRADE:  Replace embed() with:
-//   - @xenova/transformers (sentence-transformers in Node.js)
-//   - OR OpenAI text-embedding-ada-002
-//   Nothing else in this file needs to change.
-// =============================================================================
-
 class Embedding {
   embed(text: string): number[] {
-    const vec = new Array<number>(CONFIG.embeddingDim).fill(0);
-    for (let i = 0; i < Math.min(text.length, CONFIG.embeddingDim); i++) {
-      vec[i] = (text.charCodeAt(i) % 97) / 26.0;
+    const vec = new Array<number>(CONFIG.maxVectorSize).fill(0);
+    for (let i = 0; i < Math.min(text.length, CONFIG.maxVectorSize); i++) {
+      vec[i] = (text.charCodeAt(i) % 26) / 26.0;
     }
     const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
     return norm > 0 ? vec.map((v) => v / norm) : vec;
@@ -98,14 +118,7 @@ class Embedding {
 const EMBED = new Embedding();
 
 // =============================================================================
-// VECTOR STORE (LOCAL — PGVECTOR READY)
-// =============================================================================
-//
-// PGVECTOR MIGRATION:
-//   CREATE TABLE embeddings (
-//     id SERIAL PRIMARY KEY, content TEXT, embedding VECTOR(1536)
-//   );
-//   Use ivfflat index + cosine similarity via pgvector.
+// VECTOR STORE  (local — pgvector-ready)
 // =============================================================================
 
 interface VectorEntry {
@@ -117,53 +130,48 @@ interface VectorEntry {
 class VectorStore {
   data: VectorEntry[] = [];
 
-  constructor() {
-    this.data = this.load();
-  }
+  constructor() { this.data = this._load(); }
 
-  private load(): VectorEntry[] {
-    if (fs.existsSync(CONFIG.vectorFile)) {
-      return JSON.parse(fs.readFileSync(CONFIG.vectorFile, "utf8"));
-    }
+  private _load(): VectorEntry[] {
+    try {
+      if (fs.existsSync(CONFIG.vectorFile))
+        return JSON.parse(fs.readFileSync(CONFIG.vectorFile, "utf8")) as VectorEntry[];
+    } catch { /* start fresh */ }
     return [];
   }
 
   save(): void {
-    fs.writeFileSync(CONFIG.vectorFile, JSON.stringify(this.data));
+    try { fs.writeFileSync(CONFIG.vectorFile, JSON.stringify(this.data)); } catch { /* non-fatal */ }
   }
 
-  add(text: string, meta: Record<string, string>): void {
+  add(text: string, meta: Record<string, string> = {}): void {
     this.data.push({ text, vec: EMBED.embed(text), meta });
   }
 
-  private similarity(a: number[], b: number[]): number {
+  private _cosine(a: number[], b: number[]): number {
     let dot = 0, na = 0, nb = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot += a[i] * b[i];
-      na += a[i] * a[i];
-      nb += b[i] * b[i];
-    }
-    const denom = Math.sqrt(na) * Math.sqrt(nb);
-    return denom === 0 ? 0 : dot / denom;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] ** 2; nb += b[i] ** 2; }
+    const d = Math.sqrt(na) * Math.sqrt(nb);
+    return d === 0 ? 0 : dot / d;
   }
 
   search(query: string, topK = 5): Array<[number, VectorEntry]> {
     const q = EMBED.embed(query);
-    const scored: Array<[number, VectorEntry]> = this.data
-      .map((item): [number, VectorEntry] => [this.similarity(q, item.vec), item])
-      .filter(([sim]) => sim > CONFIG.similarityThreshold);
-    scored.sort((a, b) => b[0] - a[0]);
-    return scored.slice(0, topK);
+    return this.data
+      .map((item): [number, VectorEntry] => [this._cosine(q, item.vec), item])
+      .filter(([sim]) => sim > CONFIG.similarityThreshold)
+      .sort((a, b) => b[0] - a[0])
+      .slice(0, topK);
   }
 }
 
 const VECTOR = new VectorStore();
 
 // =============================================================================
-// MEMORY SYSTEM (WITH VECTOR INDEXING)
+// MEMORY STORE  (vocab + grammar + history + module tracking)
 // =============================================================================
 
-interface MemoryData {
+interface PersistedMemory {
   knowledge: Record<string, unknown>;
   skills: Record<string, boolean>;
   score: number;
@@ -171,153 +179,376 @@ interface MemoryData {
   filesCreated: number;
 }
 
-class Memory {
-  data: MemoryData;
+class MemoryStore {
+  /** Word → embedding vector (growth-tree vocabulary) */
+  vocab: Map<string, number[]> = new Map();
+  /** Observed grammar/syntax patterns */
+  grammarRules: string[] = [];
+  /** Full action history log */
+  history: Array<Record<string, unknown>> = [];
+  /** Number of auto-generated modules so far */
+  moduleCount = 0;
+
+  /** Persistent stats (score, discoveries, knowledge base) */
+  persisted: PersistedMemory;
 
   constructor() {
-    this.data = this.load();
+    this.persisted = this._loadPersisted();
+    // Re-hydrate vocab from persisted knowledge
+    for (const [topic, content] of Object.entries(this.persisted.knowledge)) {
+      this._indexWord(topic);
+      VECTOR.add(`${topic} ${String(content)}`, { t: topic });
+    }
   }
 
-  private load(): MemoryData {
-    if (fs.existsSync(CONFIG.memoryFile)) {
-      return JSON.parse(fs.readFileSync(CONFIG.memoryFile, "utf8"));
+  private _loadPersisted(): PersistedMemory {
+    try {
+      if (fs.existsSync(CONFIG.memoryFile))
+        return JSON.parse(fs.readFileSync(CONFIG.memoryFile, "utf8")) as PersistedMemory;
+    } catch { /* start fresh */ }
+    return { knowledge: {}, skills: { hangman: true }, score: 0, discoveries: 0, filesCreated: 0 };
+  }
+
+  private _indexWord(word: string): void {
+    if (!this.vocab.has(word) && word.length >= CONFIG.minWordLength) {
+      this.vocab.set(word, EMBED.embed(word));
     }
-    return {
-      knowledge: {},
-      skills: { hangman: true },
-      score: 0,
-      discoveries: 0,
-      filesCreated: 0,
-    };
+  }
+
+  /** Add a word to vocab and trigger module-growth check. */
+  addWord(word: string): void {
+    const w = word.toLowerCase().trim();
+    if (!w || w.length < CONFIG.minWordLength) return;
+    if (!this.vocab.has(w)) {
+      this.vocab.set(w, EMBED.embed(w));
+      VECTOR.add(w, { src: "word" });
+      this._checkModuleGrowth();
+    }
+  }
+
+  /** Persist a topic → content knowledge entry. */
+  addKnowledge(topic: string, content: unknown): void {
+    this.persisted.knowledge[topic] = content;
+    this._indexWord(topic);
+    VECTOR.add(`${topic} ${String(content)}`, { t: topic });
+    this.reward("knowledge");
+  }
+
+  addGrammarRule(rule: string): void {
+    if (!this.grammarRules.includes(rule)) {
+      this.grammarRules.push(rule);
+      log(`[Grammar] Rule added: ${rule}`);
+    }
+  }
+
+  logAction(action: Record<string, unknown>): void {
+    this.history.push({ ...action, ts: new Date().toISOString() });
+    if (this.history.length > 2000) this.history.shift(); // rolling window
+  }
+
+  reward(action: string, pts = 1): void {
+    this.persisted.score += pts * CONFIG.rewardFactor;
+    this.persisted.discoveries += 1;
+    log(`[Reward ✔] "${action}" +${pts}  score=${this.persisted.score}`);
+    this.logAction({ type: "reward", action, pts });
+    this._checkEvolution();
+  }
+
+  punish(action: string, pts = 1): void {
+    this.persisted.score = Math.max(0, this.persisted.score - pts * CONFIG.rewardFactor);
+    log(`[Punish ✘] "${action}" -${pts}  score=${this.persisted.score}`);
+    this.logAction({ type: "punish", action, pts });
   }
 
   save(): void {
-    fs.writeFileSync(CONFIG.memoryFile, JSON.stringify(this.data, null, 2));
-    VECTOR.save();
+    try {
+      fs.writeFileSync(CONFIG.memoryFile, JSON.stringify(this.persisted, null, 2));
+      VECTOR.save();
+    } catch (err) {
+      log(`[Memory] Save failed: ${String(err)}`);
+    }
   }
 
-  add(topic: string, content: unknown): void {
-    this.data.knowledge[topic] = content;
-    VECTOR.add(`${topic} ${String(content)}`, { t: topic });
-    this.reward();
+  // ---------------------------------------------------------------------------
+  // Module growth — triggered when vocab crosses a threshold multiple
+  // ---------------------------------------------------------------------------
+  private _checkModuleGrowth(): void {
+    const nextThreshold = (this.moduleCount + 1) * CONFIG.moduleMemoryThreshold;
+    if (this.vocab.size >= nextThreshold && this.moduleCount < CONFIG.maxModules) {
+      this.moduleCount++;
+      this._createModule(this.moduleCount);
+    }
   }
 
-  reward(pts = 1): void {
-    this.data.score += pts;
-    this.data.discoveries += 1;
+  private _createModule(id: number): void {
+    log(`[Module] Auto-expansion: module ${id} minted (vocab=${this.vocab.size})`);
+    this.logAction({ type: "module_created", id, vocabSize: this.vocab.size });
+    EVOLUTION_BUS.emit("module_created", { id, vocabSize: this.vocab.size });
+
+    // Write a generated .ts module to disk as a concrete artefact
+    CODE_SYNTH.createModule(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Evolution — triggered by score milestones
+  // ---------------------------------------------------------------------------
+  private _checkEvolution(): void {
+    const score = this.persisted.score;
+    if (score > CONFIG.skillUnlockScore && !this.persisted.skills["search"]) {
+      this.persisted.skills["search"] = true;
+      log("[Evolution] Skill unlocked: search");
+      EVOLUTION_BUS.emit("skill_unlocked", { skill: "search", score });
+    }
+    if (score > CONFIG.evolutionTriggerScore && !this.persisted.skills["self_transform"]) {
+      this.persisted.skills["self_transform"] = true;
+      log("[Evolution] Self-transformer evolution triggered!");
+      EVOLUTION_BUS.emit("self_transform", { score });
+    }
+    // Memory sharding
+    if (Object.keys(this.persisted.knowledge).length > CONFIG.shardThreshold) {
+      const fname = `shard_${this.persisted.filesCreated}.json`;
+      try {
+        fs.writeFileSync(fname, JSON.stringify(this.persisted));
+        this.persisted.knowledge = {};
+        this.persisted.filesCreated++;
+        log(`[Shard] Written → ${fname}`);
+      } catch (err) {
+        log(`[Shard] Write failed: ${String(err)}`);
+      }
+    }
+  }
+
+  getStats() {
+    return {
+      vocabSize: this.vocab.size,
+      grammarRules: this.grammarRules.length,
+      historyLength: this.history.length,
+      moduleCount: this.moduleCount,
+      knowledgeSize: Object.keys(this.persisted.knowledge).length,
+      vectorCount: VECTOR.data.length,
+      score: this.persisted.score,
+      discoveries: this.persisted.discoveries,
+      filesCreated: this.persisted.filesCreated,
+      skills: this.persisted.skills,
+    };
   }
 }
 
-const MEM = new Memory();
-
 // =============================================================================
-// INTERNET ENGINE (SAFE + CONTROLLED CRAWLING)
+// EVOLUTION EVENT BUS  (self-transformer hooks)
 // =============================================================================
+//
+//  Lightweight publish/subscribe bus.  Listeners here are the "DNA hooks" that
+//  future components (real transformer, pgvector, crawl agent) attach to.
+//
+type EvtPayload = Record<string, unknown>;
+type EvtListener = (payload: EvtPayload) => void;
 
-class Internet {
-  async dictionary(word: string): Promise<string | null> {
-    const data = await safeRequest(
-      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`
-    ) as Array<{ meanings: Array<{ definitions: Array<{ definition: string }> }> }> | null;
-    try {
-      return data?.[0]?.meanings?.[0]?.definitions?.[0]?.definition ?? null;
-    } catch { return null; }
+class EvolutionBus {
+  private listeners: Map<string, EvtListener[]> = new Map();
+
+  on(event: string, fn: EvtListener): void {
+    const list = this.listeners.get(event) ?? [];
+    list.push(fn);
+    this.listeners.set(event, list);
   }
 
-  async thesaurus(word: string): Promise<string[] | null> {
-    const data = await safeRequest(
-      `https://api.datamuse.com/words?ml=${encodeURIComponent(word)}`
-    ) as Array<{ word: string }> | null;
-    try {
-      return data?.slice(0, 5).map((x) => x.word) ?? null;
-    } catch { return null; }
-  }
-
-  async wiki(topic: string): Promise<string | null> {
-    const data = await safeRequest(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`
-    ) as { extract?: string } | null;
-    try {
-      return data?.extract ?? null;
-    } catch { return null; }
+  emit(event: string, payload: EvtPayload = {}): void {
+    log(`[EvoBus] event="${event}" payload=${JSON.stringify(payload)}`);
+    for (const fn of this.listeners.get(event) ?? []) {
+      try { fn(payload); } catch (err) { log(`[EvoBus] listener error: ${String(err)}`); }
+    }
+    broadcast(`[EvoBus] ${event}`);
   }
 }
 
-const NET = new Internet();
+const EVOLUTION_BUS = new EvolutionBus();
 
 // =============================================================================
-// SEARCH ENGINE (MEMORY → VECTOR → INTERNET)
+// CODE SYNTHESIS ENGINE  (generates .ts modules as growth artefacts)
 // =============================================================================
 
-class Search {
+class CodeSynthesis {
+  createModule(id: number): void {
+    const isoTimestamp = new Date().toISOString().replace(/[^0-9TZ:.+-]/g, "");
+    const name = `module_${id}.ts`;
+    const lines = [
+      `// BabyGPT auto-synthesized module ${id} — ${isoTimestamp}`,
+      `// Upgrade: replace stub with real learned behaviour`,
+      `export const MODULE_ID = ${id};`,
+      `export const CREATED_AT = "${isoTimestamp}";`,
+      `export function activate(): string {`,
+      `  return \`module ${id} active since ${isoTimestamp}\`;`,
+      `}`,
+      ``,
+    ];
+    try {
+      fs.writeFileSync(name, lines.join("\n"));
+      MEM.persisted.filesCreated++;
+      log(`[CodeSynth] Created ${name}`);
+    } catch (err) {
+      log(`[CodeSynth] Write failed: ${String(err)}`);
+    }
+  }
+}
+
+// Forward-declared — instantiated after MEM
+let CODE_SYNTH: CodeSynthesis;
+
+// =============================================================================
+// MEMORY — instantiate now that classes are defined
+// =============================================================================
+
+const MEM = new MemoryStore();
+CODE_SYNTH = new CodeSynthesis();
+
+// =============================================================================
+// REWARD & PUNISHMENT  (module-level helpers for ergonomic call sites)
+// =============================================================================
+
+const reward  = (action: string, pts = 1) => MEM.reward(action, pts);
+const punish  = (action: string, pts = 1) => MEM.punish(action, pts);
+
+// =============================================================================
+// SAFE URL EXPLORER  (dictionary / thesaurus / Wikipedia scrape)
+// =============================================================================
+
+class URLExplorer {
+  async explore(word: string): Promise<boolean> {
+    const base = CONFIG.safeURLs[Math.floor(Math.random() * CONFIG.safeURLs.length)];
+    const url = base + encodeURIComponent(word);
+    const body = await safeGet(url);
+    if (!body) { punish("exploreURL"); return false; }
+
+    // Extract lowercase alpha tokens ≥ minWordLength
+    const words = (body.match(/\b[a-z]{2,}\b/gi) ?? [])
+      .map((w) => w.toLowerCase())
+      .filter((w) => w.length >= CONFIG.minWordLength);
+
+    let added = 0;
+    for (const w of words) {
+      if (!MEM.vocab.has(w)) { MEM.addWord(w); added++; }
+    }
+
+    // Persist first meaningful sentence-like extract as knowledge
+    const extract = body.slice(0, 300).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (extract.length > 20) MEM.addKnowledge(word, extract);
+
+    MEM.logAction({ type: "exploreURL", url, wordsAdded: added });
+    reward("exploreURL", Math.max(1, Math.floor(added / 10)));
+    log(`[Explorer] ${url} → +${added} words`);
+    return true;
+  }
+}
+
+const EXPLORER = new URLExplorer();
+
+// =============================================================================
+// SEARCH ENGINE  (memory → vector → internet)
+// =============================================================================
+
+class SearchEngine {
   async run(query: string): Promise<unknown | null> {
-    // 1. Exact memory hit
-    if (query in MEM.data.knowledge) return MEM.data.knowledge[query];
+    // 1. Exact knowledge hit
+    if (query in MEM.persisted.knowledge) return MEM.persisted.knowledge[query];
 
-    // 2. Vector similarity search
+    // 2. Vector similarity
     const hits = VECTOR.search(query);
     if (hits.length > 0) return hits.map(([, item]) => item.text);
 
-    // 3. Internet fallback chain
-    const def = await NET.dictionary(query);
-    if (def) { MEM.add(query, def); return def; }
-
-    const syn = await NET.thesaurus(query);
-    if (syn) { MEM.add(query, syn); return syn; }
-
-    const wiki = await NET.wiki(query);
-    if (wiki) { MEM.add(query, wiki); return wiki; }
-
+    // 3. Internet fallback (try each safe URL base)
+    for (const base of CONFIG.safeURLs) {
+      const url = base + encodeURIComponent(query);
+      const body = await safeGet(url);
+      if (body) {
+        const extract = body.slice(0, 500).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        if (extract.length > 20) {
+          MEM.addKnowledge(query, extract);
+          return extract;
+        }
+      }
+    }
     return null;
   }
 }
 
-const SEARCH = new Search();
+const SEARCH = new SearchEngine();
 
 // =============================================================================
-// GAME: HANGMAN (AUTO-PLAY + REWARD)
+// HANGMAN  (MIT 10k word list + auto-play reinforcement)
 // =============================================================================
 
-const HANGMAN_WORDS = [
-  "intelligence", "learning", "system", "network", "code",
-  "knowledge", "language", "memory", "vector", "embedding",
-];
+let hangmanWordList: string[] = [...CONFIG.hangmanFallback];
+
+async function fetchHangmanWords(): Promise<void> {
+  const body = await safeGet(CONFIG.hangmanWordsURL);
+  if (body) {
+    const words = body.split("\n").map((w) => w.trim().toLowerCase()).filter((w) => w.length >= 3);
+    if (words.length > 10) {
+      hangmanWordList = words;
+      log(`[Hangman] Word list loaded: ${words.length} words`);
+    }
+  } else {
+    log("[Hangman] Using fallback word list");
+  }
+}
 
 class Hangman {
   private word: string;
   private guessed = new Set<string>();
-  private attempts = 6;
+  private wrongGuesses = 0;
+  private maxWrong = 6;
 
   constructor() {
-    this.word = HANGMAN_WORDS[Math.floor(Math.random() * HANGMAN_WORDS.length)];
+    this.word = hangmanWordList[Math.floor(Math.random() * hangmanWordList.length)];
   }
 
+  /** Fully automated play — returns true on win. */
   auto(): boolean {
-    const letters = "abcdefghijklmnopqrstuvwxyz".split("").sort(() => Math.random() - 0.5);
+    // Fisher-Yates shuffle for uniform letter ordering
+    const letters = "abcdefghijklmnopqrstuvwxyz".split("");
+    for (let i = letters.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [letters[i], letters[j]] = [letters[j], letters[i]];
+    }
     for (const g of letters) {
-      if (this.attempts <= 0) break;
+      if (this.wrongGuesses >= this.maxWrong) break;
       this.guessed.add(g);
-      if (!this.word.includes(g)) this.attempts--;
+      if (!this.word.includes(g)) this.wrongGuesses++;
       if ([...this.word].every((c) => this.guessed.has(c))) {
-        MEM.reward(5);
+        // Learn every letter of the solved word
+        this.word.split("").filter((c, i, a) => a.indexOf(c) === i).forEach((c) => MEM.addWord(c));
+        MEM.addWord(this.word);
+        reward("hangman_win", 5);
+        MEM.logAction({ type: "hangman", word: this.word, result: "WIN" });
         return true;
       }
     }
+    punish("hangman_lose");
+    MEM.logAction({ type: "hangman", word: this.word, result: "LOSE" });
     return false;
   }
 }
 
 // =============================================================================
-// SANDBOX EXECUTION (SAFE — RESTRICTED SCOPE)
+// SANDBOX EXECUTION  (safe restricted eval — seed level)
 // =============================================================================
-
+//
+//  PRODUCTION UPGRADE: replace new Function() with isolated-vm or vm2.
+//  WARNING: new Function() executes arbitrary JS within the current process.
+//  Only call Sandbox.run() with code you control or have validated externally.
+//
 class Sandbox {
   run(code: string): boolean {
+    // Basic guard: reject code containing obvious escape attempts
+    const blocked = ["require", "process", "globalThis", "__proto__", "constructor"];
+    if (blocked.some((kw) => code.includes(kw))) {
+      log("[Sandbox] Rejected: blocked keyword detected");
+      return false;
+    }
     try {
-      // SEED-LEVEL sandbox: restricts global scope to a safe console shim.
-      // PRODUCTION UPGRADE: replace with `isolated-vm` or `vm2` for true isolation.
       const fn = new Function("console", code);
-      fn({ log: (m: unknown) => log(`[SANDBOX] ${m}`) });
+      fn({ log: (m: unknown) => log(`[Sandbox] ${String(m)}`) });
       return true;
     } catch {
       return false;
@@ -328,179 +559,112 @@ class Sandbox {
 const SANDBOX = new Sandbox();
 
 // =============================================================================
-// CODE GENERATION ENGINE
+// PLANNER  (task selection — extensible to goal trees)
 // =============================================================================
 
-class CodeGen {
-  createModule(): void {
-    const name = `module_${MEM.data.filesCreated}.ts`;
-    // ts is always an ISO 8601 string produced by Date — safe to embed in a comment/string literal
-    const ts = new Date().toISOString().replace(/[^0-9T:.Z-]/g, "");
-    const code = [
-      `// Auto-generated module — ${ts}`,
-      `export function skill(): string {`,
-      `  return "generated at ${ts}";`,
-      `}`,
-      "",
-    ].join("\n");
-    fs.writeFileSync(name, code);
-    MEM.data.filesCreated += 1;
-    log(`[CODEGEN] Created ${name}`);
-  }
-}
-
-const CODEGEN = new CodeGen();
-
-// =============================================================================
-// PLANNER (TASK SELECTION — EXTENSIBLE)
-// =============================================================================
-
-type Task = "explore" | "game" | "learn" | "code";
+type Task = "explore" | "hangman" | "learn" | "codegen";
 
 class Planner {
-  private tasks: Task[] = ["explore", "game", "learn", "code"];
-
-  decide(): Task {
-    // Future: weight by score / skill unlocks / goal state
-    return this.tasks[Math.floor(Math.random() * this.tasks.length)];
-  }
+  private tasks: Task[] = ["explore", "hangman", "learn", "codegen"];
+  decide(): Task { return this.tasks[Math.floor(Math.random() * this.tasks.length)]; }
 }
 
 const PLANNER = new Planner();
 
 // =============================================================================
-// EVOLUTION ENGINE (SKILL UNLOCK + MODULE CREATION + MEMORY SHARDING)
-// =============================================================================
-
-class Evolution {
-  run(): void {
-    const score = MEM.data.score;
-
-    if (score > CONFIG.skillUnlockScore) {
-      MEM.data.skills["search"] = true;
-    }
-
-    if (score > CONFIG.moduleCreationScore) {
-      CODEGEN.createModule();
-    }
-
-    if (Object.keys(MEM.data.knowledge).length > CONFIG.maxMemoryBeforeShard) {
-      const fname = `shard_${MEM.data.filesCreated}.json`;
-      try {
-        fs.writeFileSync(fname, JSON.stringify(MEM.data));
-        MEM.data.knowledge = {};
-        MEM.data.filesCreated += 1;
-        log(`[SHARD] Written → ${fname}`);
-      } catch (err) {
-        log(`[SHARD] Failed to write ${fname}: ${String(err)}`);
-      }
-    }
-  }
-}
-
-const EVOLVE = new Evolution();
-
-// =============================================================================
-// SSE BROADCASTER (live log feed to browser clients)
+// SSE BROADCASTER  (live log feed)
 // =============================================================================
 
 const sseClients = new Set<Response>();
 
 function broadcast(line: string): void {
-  for (const res of sseClients) {
-    res.write(`data: ${JSON.stringify(line)}\n\n`);
-  }
+  const msg = `data: ${JSON.stringify(line)}\n\n`;
+  for (const res of sseClients) { try { res.write(msg); } catch { sseClients.delete(res); } }
 }
 
 // =============================================================================
-// CORE AI LOOP
+// BABY GPT CORE LOOP
 // =============================================================================
 
-class BabyAI {
+class BabyGPT {
   private recentLogs: string[] = [];
 
   private emit(msg: string): void {
     log(msg);
     this.recentLogs.push(msg);
-    if (this.recentLogs.length > 200) this.recentLogs.shift();
+    if (this.recentLogs.length > 300) this.recentLogs.shift();
     broadcast(msg);
   }
 
   private think(): string {
-    const keys = Object.keys(MEM.data.knowledge);
+    const keys = Array.from(MEM.vocab.keys());
     if (keys.length > 0) return keys[Math.floor(Math.random() * keys.length)];
-    const seeds = ["intelligence", "code", "learning", "language", "memory"];
-    return seeds[Math.floor(Math.random() * seeds.length)];
+    return CONFIG.hangmanFallback[Math.floor(Math.random() * CONFIG.hangmanFallback.length)];
   }
 
   private async explore(): Promise<void> {
-    const q = this.think();
-    const r = await SEARCH.run(q);
-    this.emit(`[EXPLORE] ${q} -> ${String(r).slice(0, 80)}`);
+    const word = this.think();
+    await EXPLORER.explore(word);
+    this.emit(`[Explore] ${word} vocab=${MEM.vocab.size}`);
   }
 
-  private play(): void {
+  private playHangman(): void {
     const win = new Hangman().auto();
-    this.emit(`[GAME] Hangman → ${win ? "WIN" : "LOSE"}`);
+    this.emit(`[Hangman] ${win ? "WIN ✔" : "LOSE ✘"}  score=${MEM.persisted.score}`);
   }
 
   private async learn(): Promise<void> {
     const word = this.think();
-    await SEARCH.run(word);
-    this.emit(`[LEARN] ${word}`);
+    const result = await SEARCH.run(word);
+    this.emit(`[Learn] "${word}" → ${String(result).slice(0, 80)}`);
   }
 
-  private code(): void {
-    CODEGEN.createModule();
-    this.emit("[CODE] Module generated");
-  }
-
-  getStatus() {
-    return {
-      score: MEM.data.score,
-      discoveries: MEM.data.discoveries,
-      knowledgeSize: Object.keys(MEM.data.knowledge).length,
-      vectorCount: VECTOR.data.length,
-      filesCreated: MEM.data.filesCreated,
-      skills: MEM.data.skills,
-    };
-  }
-
-  getRecentLogs(): string[] {
-    return [...this.recentLogs];
+  private codegen(): void {
+    CODE_SYNTH.createModule(MEM.persisted.filesCreated);
+    this.emit(`[CodeGen] Module ${MEM.persisted.filesCreated} synthesised`);
   }
 
   async tick(): Promise<void> {
     const task = PLANNER.decide();
     try {
-      if (task === "explore") await this.explore();
-      else if (task === "game")  this.play();
-      else if (task === "learn") await this.learn();
-      else if (task === "code")  this.code();
+      if      (task === "explore")  await this.explore();
+      else if (task === "hangman")  this.playHangman();
+      else if (task === "learn")    await this.learn();
+      else if (task === "codegen")  this.codegen();
 
-      EVOLVE.run();
       MEM.save();
-
       this.emit(
-        `[STATUS] score=${MEM.data.score} ` +
-        `mem=${Object.keys(MEM.data.knowledge).length} ` +
-        `vec=${VECTOR.data.length} task=${task}`
+        `[Status] score=${MEM.persisted.score} ` +
+        `vocab=${MEM.vocab.size} vec=${VECTOR.data.length} ` +
+        `modules=${MEM.moduleCount} task=${task}`
       );
     } catch (err) {
-      this.emit(`[ERROR] ${String(err)}`);
+      this.emit(`[Error] ${String(err)}`);
     }
   }
 
+  getRecentLogs(): string[] { return [...this.recentLogs]; }
+
+  /** Kick off the autonomous self-learning loop. */
   start(): void {
-    this.emit("[BOOT] Baby GPT seed starting…");
-    const tick = () => {
-      this.tick().finally(() => setTimeout(tick, CONFIG.loopDelayMs));
-    };
-    setTimeout(tick, CONFIG.loopDelayMs);
+    this.emit("[Boot] BabyGPT Growth-Tree Seed starting…");
+    const tick = () => { this.tick().finally(() => setTimeout(tick, CONFIG.selfLearningIntervalMs)); };
+    fetchHangmanWords().then(() => setTimeout(tick, CONFIG.selfLearningIntervalMs));
   }
 }
 
-const AI = new BabyAI();
+const AI = new BabyGPT();
+
+// =============================================================================
+// WIRING EVOLUTION BUS HOOKS
+// =============================================================================
+
+EVOLUTION_BUS.on("skill_unlocked",  (p) => log(`[Hook] skill_unlocked: ${JSON.stringify(p)}`));
+EVOLUTION_BUS.on("self_transform",  (p) => {
+  log(`[Hook] *** SELF-TRANSFORMER TRIGGERED *** score=${p["score"]}`);
+  // FUTURE: swap embedding engine, attach real model, trigger pgvector migration
+});
+EVOLUTION_BUS.on("module_created",  (p) => log(`[Hook] module_created id=${p["id"]}`));
 
 // =============================================================================
 // EXPRESS WEB APP
@@ -509,12 +673,12 @@ const AI = new BabyAI();
 const app = express();
 app.use(express.json());
 
-// --- Status ---
+/** GET /status — live stats snapshot */
 app.get("/status", (_req: Request, res: Response) => {
-  res.json(AI.getStatus());
+  res.json(MEM.getStats());
 });
 
-// --- Search / query ---
+/** GET /search?q=<query> — hybrid knowledge search */
 app.get("/search", async (req: Request, res: Response) => {
   const q = String(req.query["q"] ?? "").trim();
   if (!q) { res.status(400).json({ error: "q param required" }); return; }
@@ -522,27 +686,42 @@ app.get("/search", async (req: Request, res: Response) => {
   res.json({ query: q, result: result ?? null });
 });
 
-// --- Recent logs ---
+/** POST /learn  { "word": "..." } — inject knowledge manually */
+app.post("/learn", (req: Request, res: Response) => {
+  const { word } = req.body as { word?: string };
+  if (!word) { res.status(400).json({ error: "word required" }); return; }
+  MEM.addWord(word.toLowerCase());
+  MEM.save();
+  res.json({ ok: true, vocabSize: MEM.vocab.size });
+});
+
+/** POST /hangman — trigger one Hangman round */
+app.post("/hangman", (_req: Request, res: Response) => {
+  const win = new Hangman().auto();
+  MEM.save();
+  res.json({ result: win ? "WIN" : "LOSE", score: MEM.persisted.score });
+});
+
+/** POST /sandbox  { "code": "..." } — run code in restricted sandbox */
+app.post("/sandbox", (req: Request, res: Response) => {
+  const { code } = req.body as { code?: string };
+  if (!code) { res.status(400).json({ error: "code required" }); return; }
+  res.json({ success: SANDBOX.run(code) });
+});
+
+/** GET /vocab?limit=50 — peek at learned vocabulary */
+app.get("/vocab", (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(String(req.query["limit"] ?? "50"), 10), 500);
+  const words = Array.from(MEM.vocab.keys()).slice(-limit);
+  res.json({ count: MEM.vocab.size, sample: words });
+});
+
+/** GET /logs — recent log lines */
 app.get("/logs", (_req: Request, res: Response) => {
   res.json(AI.getRecentLogs());
 });
 
-// --- Play one Hangman round on demand ---
-app.post("/game/hangman", (_req: Request, res: Response) => {
-  const win = new Hangman().auto();
-  MEM.save();
-  res.json({ result: win ? "WIN" : "LOSE", score: MEM.data.score });
-});
-
-// --- Run code in sandbox ---
-app.post("/sandbox", (req: Request, res: Response) => {
-  const { code } = req.body as { code?: string };
-  if (!code) { res.status(400).json({ error: "code required" }); return; }
-  const ok = SANDBOX.run(code);
-  res.json({ success: ok });
-});
-
-// --- SSE live log stream ---
+/** GET /stream — SSE live feed */
 app.get("/stream", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -552,56 +731,82 @@ app.get("/stream", (req: Request, res: Response) => {
   req.on("close", () => sseClients.delete(res));
 });
 
-// --- Simple HTML dashboard ---
+/** GET / — HTML dashboard */
 app.get("/", (_req: Request, res: Response) => {
-  res.setHeader("Content-Type", "text/html");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Baby GPT Seed</title>
-  <style>
-    body { font-family: monospace; background: #0d0d0d; color: #39ff14; margin: 0; padding: 1rem; }
-    h1   { color: #00eaff; }
-    #status, #log { background: #111; border: 1px solid #333; padding: 1rem; border-radius: 4px; }
-    #log  { height: 400px; overflow-y: auto; margin-top: 1rem; white-space: pre-wrap; }
-    .search { margin: 1rem 0; display: flex; gap: 0.5rem; }
-    input  { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #39ff14; padding: 0.4rem; }
-    button { background: #00eaff22; border: 1px solid #00eaff; color: #00eaff; padding: 0.4rem 1rem; cursor: pointer; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BabyGPT Growth-Tree</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:monospace;background:#080c10;color:#c5f5c5;padding:1rem}
+  h1{color:#00eaff;margin-bottom:.75rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.5rem;margin-bottom:1rem}
+  .card{background:#0d1a0d;border:1px solid #1a3a1a;border-radius:4px;padding:.6rem}
+  .card .val{font-size:1.4rem;color:#39ff14}
+  .card .lbl{font-size:.7rem;color:#6a9a6a;margin-top:.2rem}
+  .row{display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap}
+  input{flex:1;min-width:160px;background:#0d1a0d;border:1px solid #2a4a2a;color:#c5f5c5;padding:.4rem .6rem;border-radius:3px}
+  button{background:#00331a;border:1px solid #00eaff;color:#00eaff;padding:.4rem .9rem;border-radius:3px;cursor:pointer}
+  button:hover{background:#004d27}
+  #result{background:#0d1a0d;border:1px solid #1a3a1a;border-radius:4px;padding:.6rem;margin-bottom:.75rem;min-height:2rem;white-space:pre-wrap;max-height:120px;overflow-y:auto}
+  #feed{background:#050c05;border:1px solid #1a3a1a;border-radius:4px;padding:.6rem;height:380px;overflow-y:auto;white-space:pre-wrap;font-size:.8rem;color:#7fc87f}
+  .tag{display:inline-block;background:#00331a;border:1px solid #005522;color:#00eaff;padding:.1rem .4rem;border-radius:2px;font-size:.7rem;margin:.1rem}
+</style>
 </head>
 <body>
-  <h1>🧠 Baby GPT Seed</h1>
-  <div id="status">Loading status…</div>
-  <div class="search">
-    <input id="q" placeholder="Search knowledge…" />
-    <button onclick="search()">Search</button>
-  </div>
-  <div id="result"></div>
-  <div id="log"></div>
-  <script>
-    async function refresh() {
-      const s = await fetch('/status').then(r => r.json());
-      document.getElementById('status').textContent =
-        'Score: ' + s.score + '  |  Knowledge: ' + s.knowledgeSize +
-        '  |  Vectors: ' + s.vectorCount + '  |  Files: ' + s.filesCreated;
-    }
-    async function search() {
-      const q = document.getElementById('q').value.trim();
-      if (!q) return;
-      const r = await fetch('/search?q=' + encodeURIComponent(q)).then(x => x.json());
-      document.getElementById('result').textContent = JSON.stringify(r.result, null, 2);
-    }
-    const logEl = document.getElementById('log');
-    const es = new EventSource('/stream');
-    es.onmessage = e => {
-      logEl.textContent += JSON.parse(e.data) + '\\n';
-      logEl.scrollTop = logEl.scrollHeight;
-      refresh();
-    };
+<h1>🌱 BabyGPT Growth-Tree Seed v2.0</h1>
+<div class="grid" id="cards">
+  <div class="card"><div class="val" id="s-score">–</div><div class="lbl">Score</div></div>
+  <div class="card"><div class="val" id="s-vocab">–</div><div class="lbl">Vocab words</div></div>
+  <div class="card"><div class="val" id="s-vec">–</div><div class="lbl">Vectors</div></div>
+  <div class="card"><div class="val" id="s-mod">–</div><div class="lbl">Modules</div></div>
+  <div class="card"><div class="val" id="s-disc">–</div><div class="lbl">Discoveries</div></div>
+  <div class="card"><div class="val" id="s-files">–</div><div class="lbl">Files created</div></div>
+</div>
+<div id="skills"></div>
+<div class="row" style="margin-top:.75rem">
+  <input id="q" placeholder="Search knowledge base…">
+  <button onclick="doSearch()">Search</button>
+  <button onclick="doHangman()">▶ Hangman</button>
+</div>
+<div id="result">Results appear here…</div>
+<div id="feed">Connecting to live feed…\n</div>
+<script>
+  const qs=s=>document.querySelector(s);
+  async function refresh(){
+    const s=await fetch('/status').then(r=>r.json());
+    qs('#s-score').textContent=s.score;
+    qs('#s-vocab').textContent=s.vocabSize;
+    qs('#s-vec').textContent=s.vectorCount;
+    qs('#s-mod').textContent=s.moduleCount;
+    qs('#s-disc').textContent=s.discoveries;
+    qs('#s-files').textContent=s.filesCreated;
+    qs('#skills').innerHTML=Object.keys(s.skills||{}).map(k=>'<span class="tag">'+k+'</span>').join('');
+  }
+  async function doSearch(){
+    const q=qs('#q').value.trim(); if(!q)return;
+    const r=await fetch('/search?q='+encodeURIComponent(q)).then(x=>x.json());
+    qs('#result').textContent=JSON.stringify(r.result,null,2);
+  }
+  async function doHangman(){
+    const r=await fetch('/hangman',{method:'POST'}).then(x=>x.json());
+    qs('#result').textContent='Hangman: '+r.result+'  score='+r.score;
     refresh();
-    setInterval(refresh, 5000);
-  </script>
+  }
+  const feed=qs('#feed');
+  const es=new EventSource('/stream');
+  es.onmessage=e=>{
+    feed.textContent+=JSON.parse(e.data)+'\\n';
+    feed.scrollTop=feed.scrollHeight;
+    refresh();
+  };
+  refresh();
+  setInterval(refresh,5000);
+</script>
 </body>
 </html>`);
 });
@@ -612,8 +817,16 @@ app.get("/", (_req: Request, res: Response) => {
 
 const server = http.createServer(app);
 server.listen(CONFIG.port, () => {
-  log(`[WEB] Baby GPT running → http://localhost:${CONFIG.port}`);
+  log(`[Web] BabyGPT running → http://localhost:${CONFIG.port}`);
   AI.start();
 });
 
-export { AI, MEM, VECTOR, SEARCH, EMBED, SANDBOX, CONFIG };
+// =============================================================================
+// EXPORTS  (for testing / external composition)
+// =============================================================================
+
+export {
+  AI, MEM, VECTOR, SEARCH, EXPLORER, EMBED, SANDBOX,
+  CODE_SYNTH, EVOLUTION_BUS, PLANNER, CONFIG,
+  reward, punish,
+};
