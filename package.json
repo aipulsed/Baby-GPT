@@ -1,0 +1,20 @@
+{
+  "name": "baby-gpt-seed",
+  "version": "1.0.0",
+  "description": "Baby-GPT: self-evolving AI seed — TypeScript web app",
+  "main": "dist/baby_gpt_seed.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/baby_gpt_seed.js",
+    "dev": "ts-node baby_gpt_seed.ts"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}
